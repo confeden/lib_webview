@@ -159,6 +159,17 @@ enum class DataResult {
 	Failed,
 };
 
+// NovaGram: absolute URLs (by prefix) that every webview hands to one
+// process-wide handler instead of fetching them itself; the request id is the
+// whole URL. A handler that answers Failed lets the webview fetch it after all.
+// Used for Telegram's mini-app SDK, whose host is dropped on censored lines.
+void SetInterceptedUrls(
+	std::vector<std::string> prefixes,
+	std::function<DataResult(DataRequest)> handler);
+[[nodiscard]] const std::vector<std::string> &InterceptedUrlPrefixes();
+[[nodiscard]] bool IsInterceptedUrl(const std::string &url);
+[[nodiscard]] DataResult HandleInterceptedUrl(DataRequest request);
+
 struct Message {
 	std::string text;
 	std::string sourceUrl;

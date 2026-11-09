@@ -501,6 +501,14 @@ HRESULT STDMETHODCALLTYPE Handler::Invoke(
 	if (hr != S_OK) {
 		return E_FAIL;
 	}
+	if (_restrictedOrigin.empty()) {
+		for (const auto &prefix : InterceptedUrlPrefixes()) {
+			const auto intercepted = ToWide(prefix) + L'*';
+			_webview->AddWebResourceRequestedFilter(
+				intercepted.c_str(),
+				COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
+		}
+	}
 
 	auto settings = winrt::com_ptr<ICoreWebView2Settings>();
 	hr = _webview->get_Settings(settings.put());
@@ -768,7 +776,9 @@ HRESULT STDMETHODCALLTYPE Handler::Invoke(
 		return S_OK;
 	}
 	const auto prefix = kDataUrlPrefix.size();
-	if (ansi.size() <= prefix || ansi.compare(0, prefix, kDataUrlPrefix)) {
+	const auto intercepted = IsInterceptedUrl(ansi);
+	if (!intercepted
+		&& (ansi.size() <= prefix || ansi.compare(0, prefix, kDataUrlPrefix))) {
 		return S_OK;
 	}
 
@@ -834,7 +844,7 @@ HRESULT STDMETHODCALLTYPE Handler::Invoke(
 		}
 	});
 	auto prepared = DataRequest{
-		.id = ansi.substr(prefix),
+		.id = intercepted ? ansi : ansi.substr(prefix),
 		.done = std::move(callback),
 	};
 	while (true) {
@@ -859,10 +869,14 @@ HRESULT STDMETHODCALLTYPE Handler::Invoke(
 		}
 	}
 
-	const auto result = _dataRequestHandler
+	const auto result = intercepted
+		? HandleInterceptedUrl(prepared)
+		: _dataRequestHandler
 		? _dataRequestHandler(prepared)
 		: DataResult::Failed;
-	if (result == DataResult::Failed) {
+	if (result == DataResult::Failed && intercepted) {
+		return S_OK; // Not answered here: the webview fetches it itself.
+	} else if (result == DataResult::Failed) {
 		return fail(_environment.get(), args);
 	} else if (result == DataResult::Pending) {
 		auto deferral = winrt::com_ptr<ICoreWebView2Deferral>();

@@ -116,7 +116,36 @@ try{Object.defineProperty(document,'cookie',{get:()=>'',set:()=>true,configurabl
 	};
 }
 
+std::vector<std::string> InterceptedPrefixes;
+std::function<DataResult(DataRequest)> InterceptedHandler;
+
 } // namespace
+
+void SetInterceptedUrls(
+		std::vector<std::string> prefixes,
+		std::function<DataResult(DataRequest)> handler) {
+	InterceptedPrefixes = std::move(prefixes);
+	InterceptedHandler = std::move(handler);
+}
+
+const std::vector<std::string> &InterceptedUrlPrefixes() {
+	return InterceptedPrefixes;
+}
+
+bool IsInterceptedUrl(const std::string &url) {
+	for (const auto &prefix : InterceptedPrefixes) {
+		if (url.size() >= prefix.size() && !url.compare(0, prefix.size(), prefix)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+DataResult HandleInterceptedUrl(DataRequest request) {
+	return InterceptedHandler
+		? InterceptedHandler(std::move(request))
+		: DataResult::Failed;
+}
 
 const char kOptionWebviewDebugEnabled[] = "webview-debug-enabled";
 
